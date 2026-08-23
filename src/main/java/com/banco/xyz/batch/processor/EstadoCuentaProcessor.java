@@ -5,13 +5,16 @@ import org.springframework.stereotype.Component;
 
 import com.banco.xyz.batch.dtos.EstadoCuentaDTO;
 import com.banco.xyz.batch.entities.EstadoCuentaEntity;
+import com.banco.xyz.batch.resilience.DataQualityException;
 
 @Component
 public class EstadoCuentaProcessor implements ItemProcessor<EstadoCuentaDTO, EstadoCuentaEntity> {
 
     @Override
-    public EstadoCuentaEntity process(EstadoCuentaDTO item) throws Exception {
-
+    public EstadoCuentaEntity process(EstadoCuentaDTO item) {
+        if (item.getCuentaId() == null || item.getFecha() == null || item.getMonto() == null) {
+            throw new DataQualityException("Movimiento de estado de cuenta inválido");
+        }
         EstadoCuentaEntity entity = new EstadoCuentaEntity();
         entity.setCuentaId(item.getCuentaId());
         entity.setFechaProceso(item.getFecha());

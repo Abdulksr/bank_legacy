@@ -4,12 +4,15 @@ import org.springframework.batch.item.ItemProcessor;
 
 import com.banco.xyz.batch.dtos.InteresesDTO;
 import com.banco.xyz.batch.entities.InteresesEntity;
+import com.banco.xyz.batch.resilience.DataQualityException;
 
 public class InteresesProcessor implements ItemProcessor<InteresesDTO, InteresesEntity> {
 
     @Override
-    public InteresesEntity process(InteresesDTO item) throws Exception {
-
+    public InteresesEntity process(InteresesDTO item) {
+        if (item.getSaldo() == null || item.getTipo() == null || item.getTipo().isBlank()) {
+            throw new DataQualityException("Interés con saldo o tipo inválidos");
+        }
         Double nuevoSaldo = item.getSaldo();
         String tipoCuenta = item.getTipo().trim().toLowerCase();
 

@@ -11,7 +11,7 @@ import org.springframework.batch.core.repository.JobInstanceAlreadyCompleteExcep
 import org.springframework.batch.core.repository.JobRestartException;
 import org.springframework.stereotype.Service;
 
-import com.banco.xyz.batch.exceptions.InteresesJobLauncherException;
+import com.banco.xyz.batch.exceptions.EstadoCuentaJobLauncherException;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +33,7 @@ public class EstadoCuentaJobService {
         } catch (JobExecutionAlreadyRunningException | JobRestartException
                 | JobInstanceAlreadyCompleteException | JobParametersInvalidException ex) {
             log.error("No fue posible iniciar el Job estadoCuentaJob", ex);
-            throw new InteresesJobLauncherException(
+            throw new EstadoCuentaJobLauncherException(
                     "No fue posible iniciar el Job estadoCuentaJob: " + ex.getMessage(),
                     ex);
         }

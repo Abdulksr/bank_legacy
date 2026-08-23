@@ -6,6 +6,7 @@ import org.springframework.core.convert.support.DefaultConversionService;
 import org.springframework.core.io.Resource;
 import org.springframework.jdbc.support.JdbcTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.core.task.TaskExecutor;
 
 import com.banco.xyz.batch.dtos.TransaccionesDTO;
 import com.banco.xyz.batch.entities.TransaccionesEntity;
@@ -29,17 +30,24 @@ import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
 import org.springframework.batch.item.file.mapping.DefaultLineMapper;
 import org.springframework.batch.item.file.transform.DelimitedLineTokenizer;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.batch.item.support.SynchronizedItemStreamReader;
+import org.springframework.batch.item.support.builder.SynchronizedItemStreamReaderBuilder;
+import org.springframework.dao.TransientDataAccessException;
+
+import com.banco.xyz.batch.resilience.DataQualitySkipPolicy;
+import com.banco.xyz.batch.resilience.OperationalBatchListener;
 
 @Configuration
 public class TransaccionesJobConfig {
 
-    private static final int CHUNK_SIZE = 10;
+    private static final int CHUNK_SIZE = 5;
 
     @Value("${ruta.archivo.transacciones:classpath:data/semana_1/transacciones.csv}")
     private Resource archivoTransacciones;
 
     @Bean
-    public FlatFileItemReader<TransaccionesDTO> transaccionesItemReader() {
+    public SynchronizedItemStreamReader<TransaccionesDTO> transaccionesItemReader() {
         DelimitedLineTokenizer tokenizer = new DelimitedLineTokenizer();
         tokenizer.setNames("id", "fecha", "monto", "tipo");
 
@@ -53,11 +61,14 @@ public class TransaccionesJobConfig {
         lineMapper.setFieldSetMapper(fieldSetMapper);
         lineMapper.setLineTokenizer(tokenizer);
 
-        return new FlatFileItemReaderBuilder<TransaccionesDTO>()
+        FlatFileItemReader<TransaccionesDTO> delegate = new FlatFileItemReaderBuilder<TransaccionesDTO>()
                 .name("transaccionesItemReader")
                 .resource(archivoTransacciones)
                 .linesToSkip(1)
                 .lineMapper(lineMapper)
+                .build();
+        return new SynchronizedItemStreamReaderBuilder<TransaccionesDTO>()
+                .delegate(delegate)
                 .build();
     }
 
@@ -83,21 +94,32 @@ public class TransaccionesJobConfig {
     @Bean
     public Step transaccionesStep(JobRepository jobRepository,
             PlatformTransactionManager transactionManager,
-            FlatFileItemReader<TransaccionesDTO> transaccionesItemReader,
+            SynchronizedItemStreamReader<TransaccionesDTO> transaccionesItemReader,
             TransaccionesProcessor transaccionesItemProcessor,
-            JdbcBatchItemWriter<TransaccionesEntity> transaccionesItemWriter) {
+            JdbcBatchItemWriter<TransaccionesEntity> transaccionesItemWriter,
+            @Qualifier("batchTaskExecutor") TaskExecutor batchTaskExecutor,
+            OperationalBatchListener operationalBatchListener) {
         return new StepBuilder("transaccionesStep", jobRepository)
                 .<TransaccionesDTO, TransaccionesEntity>chunk(CHUNK_SIZE, transactionManager)
                 .reader(transaccionesItemReader)
                 .processor(transaccionesItemProcessor)
                 .writer(transaccionesItemWriter)
+                .faultTolerant()
+                .skipPolicy(new DataQualitySkipPolicy())
+                .retry(TransientDataAccessException.class)
+                .retryLimit(3)
+                .listener(operationalBatchListener)
+                .taskExecutor(batchTaskExecutor)
+                .throttleLimit(3)
                 .build();
     }
 
     @Bean
-    public Job transaccionesJob(JobRepository jobRepository, Step transaccionesStep) {
+    public Job transaccionesJob(JobRepository jobRepository, Step transaccionesStep,
+            OperationalBatchListener operationalBatchListener) {
         return new JobBuilder("transaccionesJob", jobRepository)
                 .incrementer(new RunIdIncrementer())
+                .listener(operationalBatchListener)
                 .start(transaccionesStep)
                 .build();
     }

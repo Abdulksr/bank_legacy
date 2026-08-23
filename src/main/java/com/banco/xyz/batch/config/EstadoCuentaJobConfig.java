@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.core.task.TaskExecutor;
 
 import com.banco.xyz.batch.dtos.EstadoCuentaDTO;
 import org.springframework.core.convert.support.DefaultConversionService;
@@ -29,6 +30,13 @@ import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
 import org.springframework.batch.item.file.mapping.DefaultLineMapper;
 import org.springframework.batch.item.file.transform.DelimitedLineTokenizer;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.batch.item.support.SynchronizedItemStreamReader;
+import org.springframework.batch.item.support.builder.SynchronizedItemStreamReaderBuilder;
+import org.springframework.dao.TransientDataAccessException;
+
+import com.banco.xyz.batch.resilience.DataQualitySkipPolicy;
+import com.banco.xyz.batch.resilience.OperationalBatchListener;
 
 @Configuration
 public class EstadoCuentaJobConfig {
@@ -36,10 +44,10 @@ public class EstadoCuentaJobConfig {
     @Value("${ruta.archivo.estadoCuenta:classpath:data/semana_1/cuentas_anuales.csv}")
     private Resource archivoCuentasAnuales;
 
-    private static final int CHUNK_SIZE = 10;
+    private static final int CHUNK_SIZE = 5;
 
     @Bean
-    public FlatFileItemReader<EstadoCuentaDTO> estadoCuentaItemReader() {
+    public SynchronizedItemStreamReader<EstadoCuentaDTO> estadoCuentaItemReader() {
         DelimitedLineTokenizer tokenizer = new DelimitedLineTokenizer();
         tokenizer.setNames("cuentaId", "fecha", "transaccion", "monto", "descripcion");
 
@@ -54,11 +62,14 @@ public class EstadoCuentaJobConfig {
         lineMapper.setFieldSetMapper(fieldSetMapper);
         lineMapper.setLineTokenizer(tokenizer);
 
-        return new FlatFileItemReaderBuilder<EstadoCuentaDTO>()
+        FlatFileItemReader<EstadoCuentaDTO> delegate = new FlatFileItemReaderBuilder<EstadoCuentaDTO>()
                 .name("estadoCuentaItemReader")
                 .resource(archivoCuentasAnuales)
                 .linesToSkip(1)
                 .lineMapper(lineMapper)
+                .build();
+        return new SynchronizedItemStreamReaderBuilder<EstadoCuentaDTO>()
+                .delegate(delegate)
                 .build();
     }
 
@@ -79,21 +90,32 @@ public class EstadoCuentaJobConfig {
     @Bean
     public Step estadoCuentaStep(JobRepository jobRepository,
             PlatformTransactionManager transactionManager,
-            FlatFileItemReader<EstadoCuentaDTO> estadoCuentaItemReader,
+            SynchronizedItemStreamReader<EstadoCuentaDTO> estadoCuentaItemReader,
             EstadoCuentaProcessor estadoCuentaItemProcessor,
-            JdbcBatchItemWriter<EstadoCuentaEntity> estadoCuentaItemWriter) {
+            JdbcBatchItemWriter<EstadoCuentaEntity> estadoCuentaItemWriter,
+            @Qualifier("batchTaskExecutor") TaskExecutor batchTaskExecutor,
+            OperationalBatchListener operationalBatchListener) {
         return new StepBuilder("estadoCuentaStep", jobRepository)
                 .<EstadoCuentaDTO, EstadoCuentaEntity>chunk(CHUNK_SIZE, transactionManager)
                 .reader(estadoCuentaItemReader)
                 .processor(estadoCuentaItemProcessor)
                 .writer(estadoCuentaItemWriter)
+                .faultTolerant()
+                .skipPolicy(new DataQualitySkipPolicy())
+                .retry(TransientDataAccessException.class)
+                .retryLimit(3)
+                .listener(operationalBatchListener)
+                .taskExecutor(batchTaskExecutor)
+                .throttleLimit(3)
                 .build();
     }
 
     @Bean
-    public Job estadoCuentaJob(JobRepository jobRepository, Step estadoCuentaStep) {
+    public Job estadoCuentaJob(JobRepository jobRepository, Step estadoCuentaStep,
+            OperationalBatchListener operationalBatchListener) {
         return new JobBuilder("estadoCuentaJob", jobRepository)
                 .incrementer(new RunIdIncrementer())
+                .listener(operationalBatchListener)
                 .start(estadoCuentaStep)
                 .build();
     }

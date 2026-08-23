@@ -1,53 +1,53 @@
 # Sistema de Migración Batch - Banco XYZ
 
-Este proyecto es una solución empresarial desarrollada con **Spring Boot** y **Spring Batch** para modernizar y procesar la información heredada (Legacy) del Banco XYZ. Se enfoca en el procesamiento masivo de datos mediante la lectura de archivos CSV y su persistencia optimizada en una base de datos MySQL.
+Implementación Semana 2 con Spring Boot, Spring Batch y MySQL. Los tres procesos convierten CSV en entidades procesadas y las persisten por JDBC en MySQL; se mantienen los lanzadores REST existentes.
 
-## Arquitectura y Procesos Clave
+## Jobs S2
 
-El sistema cuenta con tres Jobs principales (procesos Batch) expuestos mediante una API REST para su ejecución bajo demanda:
+| Job | CSV de entrada | Destino MySQL | Endpoint POST |
+| --- | --- | --- | --- |
+| `transaccionesJob` | `transacciones.csv` | `transacciones` | `/api/batch/job/transacciones` |
+| `interesesJob` | `intereses.csv` | `intereses` | `/api/batch/job/intereses` |
+| `estadoCuentaJob` | `cuentas_anuales.csv` | `estado_cuenta` | `/api/batch/job/estado-cuenta` |
 
-### 1. Job de Transacciones Diarias (`/api/batch/job/transacciones`)
-Lee el archivo `transacciones.csv`, valida la consistencia de los datos (filtrando transacciones con montos nulos o negativos) y registra la información validada en la tabla `transacciones`.
+Cada step usa exactamente chunks de 5 registros. Su `FlatFileItemReader` está encapsulado en un `SynchronizedItemStreamReader` y el step se ejecuta con un `ThreadPoolTaskExecutor` fijo de 3 hilos (`batch-worker-*`).
 
-### 2. Job de Cálculo de Intereses Mensuales (`/api/batch/job/intereses`)
-Procesa el archivo `intereses.csv`. Aplica la lógica de negocio bancaria correspondiente:
-- **Cuentas de Ahorro:** Bonificación del 5% al saldo.
-- **Préstamos:** Incremento del 10% a la deuda.
-Guarda el resultado como un registro de log en la tabla `intereses` utilizando llaves primarias autoincrementales para mantener un historial limpio.
+## Resiliencia y operación
 
-### 3. Job de Estados de Cuenta Anuales (`/api/batch/job/estados-cuenta`)
-Genera un resumen financiero anual a partir de `cuentas_anuales.csv`. Utiliza una técnica avanzada de **Upsert (Insert on Duplicate Key Update)** en MySQL para acumular sobre la marcha:
-- Saldo final calculado.
-- Cantidad total de transacciones en el año.
-- Sumatoria de ingresos y egresos.
-- Fecha del último movimiento registrado.
+- `DataQualitySkipPolicy` omite exclusivamente errores de calidad o parsing y tiene un límite explícito de 10 omisiones por step.
+- Los errores transitorios de acceso a datos se reintentan como máximo 3 veces.
+- `OperationalBatchListener` registra inicio, término y las omisiones; al finalizar entrega métricas de lectura, escritura y skips.
+- Los jobs usan `JobRepository` y `RunIdIncrementer`. Cada POST obtiene el siguiente `run.id` mediante `JobExplorer`, por lo que una nueva ejecución crea una instancia distinta y permite reejecutar el mismo job.
 
-## Tecnologías Utilizadas
+## Requisitos
 
-- **Java 17+**
-- **Spring Boot 3.2.x**
-- **Spring Batch 5.x** (Arquitectura de Chunk-oriented processing)
-- **Spring Data JPA** & **JDBC**
-- **MySQL 8+** (Driver Connector/J)
-- **Lombok**
+- Java 17.
+- Maven 3.9 o compatible.
+- MySQL 8 en `localhost:3306`, base `banco_xyz_batch`, o credenciales equivalentes configuradas en `src/main/resources/application.properties`.
 
-## Configuración y Ejecución
+## Ejecución
 
-1. **Base de datos:**
-   Es necesario asegurarse de tener un servidor MySQL en ejecución en el puerto `3306` con una base de datos llamada `banco_xyz_batch` y las credenciales correspondientes configuradas en el archivo `src/main/resources/application.properties`.
+```bash
+mvn test
+mvn spring-boot:run
+```
 
-2. **Arranque:**
-   Se debe ejecutar la clase principal `BatchApplication.java` desde el entorno de desarrollo o empaquetar la aplicación con Maven utilizando los siguientes comandos:
-   ```bash
-   mvn clean install
-   mvn spring-boot:run
-   ```
+Los CSV por defecto están en `src/main/resources/data/semana_1`. Pueden cambiarse al iniciar la aplicación:
 
-3. **Ejecución de Procesos (Postman):**
-   Para iniciar los procesos, es necesario enviar peticiones HTTP `POST` a los siguientes endpoints:
-   - `http://localhost:8080/api/batch/job/transacciones`
-   - `http://localhost:8080/api/batch/job/intereses`
-   - `http://localhost:8080/api/batch/job/estados-cuenta`
+```bash
+mvn spring-boot:run -Dspring-boot.run.arguments="--ruta.archivo.transacciones=file:/ruta/transacciones.csv --ruta.archivo.intereses=file:/ruta/intereses.csv --ruta.archivo.estadoCuenta=file:/ruta/cuentas_anuales.csv"
+```
 
----
-*Proyecto desarrollado como actividad práctica de modernización de sistemas legacy con Spring Batch.*
+Ejecute un job con `POST`:
+
+```bash
+curl -X POST http://localhost:8080/api/batch/job/transacciones
+curl -X POST http://localhost:8080/api/batch/job/intereses
+curl -X POST http://localhost:8080/api/batch/job/estado-cuenta
+```
+
+La respuesta incluye `jobExecutionId`, estado y fechas de la ejecución. Repetir el mismo POST genera el siguiente `run.id`; no se requiere modificar el CSV para reejecutar.
+
+## Evidencia operativa esperada
+
+En los logs debe observarse el inicio y término de cada job con su `executionId`, estado final, contadores `read`, `write` y `skip`, además de un `WARN` por cada registro omitido. Si se supera el límite de 10 problemas de calidad o parsing en un step, la ejecución debe fallar. Los errores transitorios de datos deben mostrar hasta tres intentos antes de propagarse.
