@@ -8,11 +8,10 @@ import com.banco.xyz.batch.entities.TransaccionesEntity;
 public class TransaccionesProcessor implements ItemProcessor<TransaccionesDTO, TransaccionesEntity> {
 
     @Override
-    public TransaccionesEntity process(TransaccionesDTO dto) throws Exception {
-
-        if (dto.getMonto() == 0 || dto.getMonto() < 0 || dto.getFecha() == null) {
-            System.out.println("Anomalia detectada y descartada en la transaccion: " + dto);
-            return null;
+    public TransaccionesEntity process(TransaccionesDTO dto) {
+        if (dto == null || dto.getId() == null || dto.getMonto() == null || dto.getMonto() <= 0
+                || dto.getFecha() == null || dto.getTipo() == null || dto.getTipo().isBlank()) {
+            throw new InvalidBatchDataException("Transaccion invalida");
         }
 
         TransaccionesEntity entity = new TransaccionesEntity();

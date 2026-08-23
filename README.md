@@ -47,7 +47,16 @@ Genera un resumen financiero anual a partir de `cuentas_anuales.csv`. Utiliza un
    Para iniciar los procesos, es necesario enviar peticiones HTTP `POST` a los siguientes endpoints:
    - `http://localhost:8080/api/batch/job/transacciones`
    - `http://localhost:8080/api/batch/job/intereses`
-   - `http://localhost:8080/api/batch/job/estados-cuenta`
+    - `http://localhost:8080/api/batch/job/estado-cuenta`
+
+   Ejemplos con `curl`:
+   ```bash
+   curl -X POST http://localhost:8080/api/batch/job/transacciones
+   curl -X POST http://localhost:8080/api/batch/job/intereses
+   curl -X POST http://localhost:8080/api/batch/job/estado-cuenta
+   ```
+
+> **Configuración S2:** cada step procesa chunks de 5 con un executor fijo de 3 hilos, reader sincronizado, skip de datos inválidos (máximo 10) y hasta 3 reintentos de errores transitorios.
 
 ---
 *Proyecto desarrollado como actividad práctica de modernización de sistemas legacy con Spring Batch.*
