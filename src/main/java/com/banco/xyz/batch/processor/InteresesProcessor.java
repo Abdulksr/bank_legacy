@@ -8,8 +8,12 @@ import com.banco.xyz.batch.entities.InteresesEntity;
 public class InteresesProcessor implements ItemProcessor<InteresesDTO, InteresesEntity> {
 
     @Override
-    public InteresesEntity process(InteresesDTO item) throws Exception {
-
+    public InteresesEntity process(InteresesDTO item) {
+        if (item == null || item.getCuentaId() == null || item.getNombre() == null || item.getNombre().isBlank()
+                || item.getSaldo() == null || item.getEdad() == null || item.getEdad() < 0
+                || item.getTipo() == null || item.getTipo().isBlank()) {
+            throw new InvalidBatchDataException("Interes invalido");
+        }
         Double nuevoSaldo = item.getSaldo();
         String tipoCuenta = item.getTipo().trim().toLowerCase();
 
