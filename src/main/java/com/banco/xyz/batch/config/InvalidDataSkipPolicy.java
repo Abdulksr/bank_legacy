@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class InvalidDataSkipPolicy implements SkipPolicy {
 
-    public static final int MAX_SKIP_COUNT = 10;
+    public static final int MAX_SKIP_COUNT = 500;
 
     @Override
     public boolean shouldSkip(Throwable throwable, long skipCount) {

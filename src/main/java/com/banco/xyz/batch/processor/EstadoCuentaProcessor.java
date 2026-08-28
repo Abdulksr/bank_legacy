@@ -16,6 +16,7 @@ public class EstadoCuentaProcessor implements ItemProcessor<EstadoCuentaDTO, Est
         EstadoCuentaEntity entity = new EstadoCuentaEntity();
         entity.setCuentaId(item.getCuentaId());
         entity.setFechaProceso(item.getFecha());
+        entity.setAnio(item.getFecha().getYear());
         entity.setCantidadTransacciones(1);
         if (item.getMonto() > 0) {
             entity.setTotalIngresos(item.getMonto());

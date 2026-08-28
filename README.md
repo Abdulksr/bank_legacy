@@ -58,5 +58,7 @@ Genera un resumen financiero anual a partir de `cuentas_anuales.csv`. Utiliza un
 
 > **Configuración S2:** cada step procesa chunks de 5 con un executor fijo de 3 hilos, reader sincronizado, skip de datos inválidos (máximo 10) y hasta 3 reintentos de errores transitorios.
 
+> **Configuración S3 (Arquitectura Escalable y Tolerante a Fallos):** Se implementó una arquitectura Master/Worker mediante un `CsvPartitioner` dinámico. El `partitionTaskExecutor` distribuye particiones utilizando un Thread Pool optimizado (`corePoolSize(10)`, `queueCapacity(10)`). La tolerancia a fallos ("Dirty Data") se gestiona mediante una Skip Policy global con un límite de 500 omisiones por partición, capturando excepciones de parseo y validación de negocio. Adicionalmente, se configuró una llave única compuesta (cuenta, año) para preservar la integridad referencial y prevenir sobreescrituras (idempotencia) en los Estados de Cuenta.
+
 ---
 *Proyecto desarrollado como actividad práctica de modernización de sistemas legacy con Spring Batch.*
