@@ -20,8 +20,8 @@ public class BatchInfrastructureConfig {
     @Bean
     public TaskExecutor partitionTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(3);
-        executor.setMaxPoolSize(3);
+        executor.setCorePoolSize(5);
+        executor.setMaxPoolSize(10);
         executor.setQueueCapacity(10);
         executor.setThreadNamePrefix("batch-");
         executor.initialize();

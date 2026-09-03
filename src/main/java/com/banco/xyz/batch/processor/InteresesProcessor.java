@@ -10,8 +10,13 @@ public class InteresesProcessor implements ItemProcessor<InteresesDTO, Intereses
     @Override
     public InteresesEntity process(InteresesDTO item) {
         if (item == null || item.getCuentaId() == null || item.getNombre() == null || item.getNombre().isBlank()
-                || item.getSaldo() == null || item.getEdad() == null || item.getEdad() < 0
-                || item.getTipo() == null || item.getTipo().isBlank()) {
+                || item.getNombre().length() <= 2 ||
+                item.getSaldo() == null || item.getSaldo() <= 0 ||
+                item.getEdad() == null || item.getEdad() >= 110 || item.getEdad() < 0 ||
+                item.getTipo() == null || item.getTipo().isBlank() ||
+                !item.getTipo().trim().toLowerCase().equals("ahorro") &&
+                        !item.getTipo().trim().toLowerCase().equals("prestamo") &&
+                        !item.getTipo().trim().toLowerCase().equals("hipoteca")) {
             throw new InvalidBatchDataException("Interes invalido");
         }
         Double nuevoSaldo = item.getSaldo();
@@ -23,6 +28,9 @@ public class InteresesProcessor implements ItemProcessor<InteresesDTO, Intereses
                 break;
             case "prestamo":
                 nuevoSaldo += nuevoSaldo * 0.10;
+                break;
+            case "hipoteca":
+                nuevoSaldo += nuevoSaldo * 0.15;
                 break;
             default:
                 break;

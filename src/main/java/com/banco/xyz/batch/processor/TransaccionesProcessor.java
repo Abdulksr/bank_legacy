@@ -10,7 +10,9 @@ public class TransaccionesProcessor implements ItemProcessor<TransaccionesDTO, T
     @Override
     public TransaccionesEntity process(TransaccionesDTO dto) {
         if (dto == null || dto.getId() == null || dto.getMonto() == null || dto.getMonto() <= 0
-                || dto.getFecha() == null || dto.getTipo() == null || dto.getTipo().isBlank()) {
+                || dto.getFecha() == null || dto.getTipo() == null || dto.getTipo().isBlank() ||
+                !dto.getTipo().trim().toLowerCase().equals("credito") &&
+                        !dto.getTipo().trim().toLowerCase().equals("debito")) {
             throw new InvalidBatchDataException("Transaccion invalida");
         }
 

@@ -10,7 +10,12 @@ public class EstadoCuentaProcessor implements ItemProcessor<EstadoCuentaDTO, Est
     @Override
     public EstadoCuentaEntity process(EstadoCuentaDTO item) {
         if (item == null || item.getCuentaId() == null || item.getCuentaId().isBlank() || item.getFecha() == null
-                || item.getMonto() == null) {
+                || item.getMonto() == null || item.getMonto() == 0 || item.getTransaccion() == null
+                || item.getTransaccion().isBlank() ||
+                !item.getTransaccion().trim().toLowerCase().equals("deposito") &&
+                        !item.getTransaccion().trim().toLowerCase().equals("retiro") &&
+                        !item.getTransaccion().trim().toLowerCase().equals("compra") &&
+                        !item.getTransaccion().trim().toLowerCase().equals("pago")) {
             throw new InvalidBatchDataException("Movimiento anual invalido");
         }
         EstadoCuentaEntity entity = new EstadoCuentaEntity();
